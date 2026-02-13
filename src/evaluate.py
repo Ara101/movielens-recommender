@@ -44,7 +44,8 @@ def get_user_top_n_predictions(model, trainset, testset, n=10, threshold=3.5):
             # Get items already rated by user
             user_ratings = trainset.ur[user_inner_id]
             rated_items = {item_id for (item_id, _) in user_ratings}
-        except:
+        except ValueError:
+            # User not in trainset
             rated_items = set()
         
         # Predict ratings for unrated items

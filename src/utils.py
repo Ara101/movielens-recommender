@@ -19,16 +19,13 @@ def ndcg_at_k(relevance_scores, k=10):
     if len(relevance_scores) == 0:
         return 0.0
     
-    # Calculate DCG (Discounted Cumulative Gain)
-    dcg = relevance_scores[0]
-    for i in range(1, len(relevance_scores)):
-        dcg += relevance_scores[i] / np.log2(i + 1)
+    # Calculate DCG (Discounted Cumulative Gain) using vectorized operations
+    positions = np.arange(1, len(relevance_scores) + 1)
+    dcg = np.sum(relevance_scores / np.log2(positions + 1))
     
     # Calculate IDCG (Ideal DCG) - sort relevance scores in descending order
     ideal_relevance = np.sort(relevance_scores)[::-1]
-    idcg = ideal_relevance[0]
-    for i in range(1, len(ideal_relevance)):
-        idcg += ideal_relevance[i] / np.log2(i + 1)
+    idcg = np.sum(ideal_relevance / np.log2(positions + 1))
     
     # Avoid division by zero
     if idcg == 0:
