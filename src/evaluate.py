@@ -1,144 +1,140 @@
-import numpy as np
-import pickle
+"""
+Evaluation module for the MovieLens SVD recommender.
+
+Computes ranking (NDCG@k, Precision@k) and rating-prediction (RMSE, MAE)
+metrics using the from-scratch PyTorch SVD model.
+
+Run:
+    python src/evaluate.py
+"""
+
 import os
+import sys
+import numpy as np
+import torch
 from collections import defaultdict
 
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+_ROOT_DIR = os.path.join(_SCRIPT_DIR, "..")
+sys.path.insert(0, os.path.join(_ROOT_DIR, "models"))
 
-def ndcg_at_k(relevant_items, recommended_items, k):
-    """
-    Compute Normalized Discounted Cumulative Gain at k.
-    
-    Args:
-        relevant_items: Set or list of relevant (highly-rated) items for user
-        recommended_items: List of recommended item IDs (in order)
-        k: Cutoff for NDCG@k
-    
-    Returns:
-        NDCG@k score (0 to 1)
-    """
-    # DCG: sum of relevance / log2(rank + 1)
-    dcg = 0.0
-    for rank, item in enumerate(recommended_items[:k], 1):
-        if item in relevant_items:
-            dcg += 1.0 / np.log2(rank + 1)
-    
-    # IDCG: ideal DCG (all relevant items ranked first)
-    idcg = 0.0
-    for rank in range(1, min(len(relevant_items), k) + 1):
-        idcg += 1.0 / np.log2(rank + 1)
-    
-    # Avoid division by zero
-    if idcg == 0:
-        return 0.0
-    
-    return dcg / idcg
+from svd_rating_predictor import SVDRatingPredictor
+from train import load_ratings, train_test_split_ratings
+from compute_ndcg import (
+    ndcg_at_k,
+    precision_at_k,
+    recall_at_k,
+    hit_rate_at_k,
+    get_user_recommendations,
+    evaluate_all_users,
+)
 
 
-def precision_at_k(relevant_items, recommended_items, k):
-    """
-    Compute Precision at k.
-    
-    Args:
-        relevant_items: Set or list of relevant (highly-rated) items for user
-        recommended_items: List of recommended item IDs (in order)
-        k: Cutoff for Precision@k
-    
-    Returns:
-        Precision@k score (0 to 1)
-    """
-    hits = sum(1 for item in recommended_items[:k] if item in relevant_items)
-    return hits / k
+# ------------------------------------------------------------------ #
+# Rating-prediction metrics
+# ------------------------------------------------------------------ #
+
+def compute_rmse(model, test_triples):
+    """Root Mean Squared Error on test (user, item, rating) triples."""
+    u = torch.tensor([x[0] for x in test_triples], dtype=torch.long)
+    i = torch.tensor([x[1] for x in test_triples], dtype=torch.long)
+    r = torch.tensor([x[2] for x in test_triples], dtype=torch.float)
+    with torch.no_grad():
+        pred = model(u, i)
+    return float(((pred - r) ** 2).mean().sqrt())
 
 
-def evaluate_ranking_metrics(model, trainset, testset, k=10):
-    """
-    Evaluate ranking metrics (NDCG@k, Precision@k) on test set.
-    
-    Args:
-        model: Trained SVD model
-        trainset: Training set (to exclude rated items)
-        testset: Test set with ground truth ratings
-        k: Cutoff for metrics
-    
-    Returns:
-        Dictionary with average metrics
-    """
-    # Build user-to-items mapping for trainset (rated items)
-    user_rated_items = defaultdict(set)
-    for uid, iid, rating in trainset.all_ratings():
-        user_rated_items[uid].add(iid)
-    
-    # Build user-to-relevant-items mapping for testset (high ratings)
-    user_relevant_items = defaultdict(set)
-    for uid, iid, rating in testset:
-        if rating >= 4.0:  # Consider rating >= 4 as relevant
-            user_relevant_items[uid].add(iid)
-    
-    ndcg_scores = []
-    precision_scores = []
-    
-    # For each user in test set, compute metrics
-    all_users = set(uid for uid, _, _ in testset)
-    for uid in all_users:
-        if uid not in user_relevant_items:
-            continue  # Skip users with no relevant items
-        
-        # Get all items not rated in training
-        all_items = set(trainset.all_items())
-        unrated = all_items - user_rated_items[uid]
-        
-        # Get predictions for unrated items
-        preds = [(iid, model.predict(uid, iid).est) for iid in unrated]
-        preds.sort(key=lambda x: x[1], reverse=True)
-        recommended = [iid for iid, _ in preds[:k]]
-        
-        # Compute metrics
-        relevant = user_relevant_items[uid]
-        ndcg = ndcg_at_k(relevant, recommended, k)
-        prec = precision_at_k(relevant, recommended, k)
-        
-        ndcg_scores.append(ndcg)
-        precision_scores.append(prec)
-    
-    results = {
-        "ndcg@k": np.mean(ndcg_scores) if ndcg_scores else 0.0,
-        "precision@k": np.mean(precision_scores) if precision_scores else 0.0,
-        "num_users_evaluated": len(ndcg_scores),
-    }
-    
-    return results
+def compute_mae(model, test_triples):
+    """Mean Absolute Error on test (user, item, rating) triples."""
+    u = torch.tensor([x[0] for x in test_triples], dtype=torch.long)
+    i = torch.tensor([x[1] for x in test_triples], dtype=torch.long)
+    r = torch.tensor([x[2] for x in test_triples], dtype=torch.float)
+    with torch.no_grad():
+        pred = model(u, i)
+    return float((pred - r).abs().mean())
 
 
-def save_metrics(results, filepath="../results/metrics.txt", k=10):
-    """Save evaluation metrics to file."""
+# ------------------------------------------------------------------ #
+# Save / print helpers
+# ------------------------------------------------------------------ #
+
+def save_metrics(results, filepath=None, k=10):
+    """Save evaluation metrics to a text file."""
+    if filepath is None:
+        filepath = os.path.join(_ROOT_DIR, "results", "metrics.txt")
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
-    with open(filepath, 'w') as f:
+    with open(filepath, "w") as f:
         f.write(f"Evaluation Metrics (k={k})\n")
-        f.write("=" * 40 + "\n")
-        f.write(f"NDCG@{k}: {results['ndcg@k']:.4f}\n")
-        f.write(f"Precision@{k}: {results['precision@k']:.4f}\n")
-        f.write(f"Users evaluated: {results['num_users_evaluated']}\n")
+        f.write("=" * 45 + "\n")
+        for key, val in results.items():
+            if not key.startswith("_"):
+                if isinstance(val, float):
+                    f.write(f"{key:<22} {val:.4f}\n")
+                else:
+                    f.write(f"{key:<22} {val}\n")
     print(f"Metrics saved to {filepath}")
 
 
+def print_results(results, k=10):
+    """Pretty-print evaluation results to the console."""
+    print(f"\n{'Metric':<22}{'Value'}")
+    print("-" * 35)
+    for key, val in results.items():
+        if not key.startswith("_"):
+            if isinstance(val, float):
+                print(f"{key:<22}{val:.4f}")
+            else:
+                print(f"{key:<22}{val}")
+
+
+# ------------------------------------------------------------------ #
+# Main
+# ------------------------------------------------------------------ #
+
+def _load_model():
+    """Load the trained SVD model + data splits."""
+    ratings, num_users, num_items = load_ratings()
+    train, test = train_test_split_ratings(ratings)
+    global_mean = np.mean([r for _, _, r in train])
+
+    model = SVDRatingPredictor(
+        num_users=num_users, num_items=num_items,
+        n_factors=20, global_mean=global_mean,
+    )
+    model_path = os.path.join(_ROOT_DIR, "models", "svd_rating_predictor.pt")
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(
+            f"No trained model at {model_path}. Run: python src/train.py"
+        )
+    model.load_state_dict(torch.load(model_path, weights_only=True))
+    model.eval()
+    return model, train, test, num_users, num_items
+
+
 if __name__ == "__main__":
-    # Load model and data
-    with open("../models/svd_model.pkl", 'rb') as f:
-        model = pickle.load(f)
-    with open("../models/trainset.pkl", 'rb') as f:
-        trainset = pickle.load(f)
-    
-    # Load testset (or recompute)
-    from train import train_and_save
-    _, _, testset = train_and_save()
-    
-    # Evaluate
+    print("=" * 60)
+    print("MODEL EVALUATION — SVD on MovieLens 100k")
+    print("=" * 60)
+
+    model, train, test, num_users, num_items = _load_model()
+
     k = 10
-    results = evaluate_ranking_metrics(model, trainset, testset, k=k)
-    
-    print(f"\nEvaluation Results (k={k})")
-    print(f"NDCG@{k}: {results['ndcg@k']:.4f}")
-    print(f"Precision@{k}: {results['precision@k']:.4f}")
-    print(f"Users evaluated: {results['num_users_evaluated']}")
-    
+    # Rating-prediction metrics
+    rmse = compute_rmse(model, test)
+    mae = compute_mae(model, test)
+
+    # Ranking metrics
+    ranking = evaluate_all_users(model, train, test, num_items, k=k)
+
+    results = {
+        "RMSE": rmse,
+        "MAE": mae,
+        f"NDCG@{k}": ranking["ndcg@k"],
+        f"Precision@{k}": ranking["precision@k"],
+        f"Recall@{k}": ranking["recall@k"],
+        f"HitRate@{k}": ranking["hit_rate@k"],
+        "users_evaluated": ranking["num_users_evaluated"],
+    }
+
+    print_results(results, k=k)
     save_metrics(results, k=k)

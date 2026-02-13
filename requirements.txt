@@ -1,5 +1,5 @@
-scikit-surprise==1.1.4
-pandas==2.3.3
+torch
 numpy==1.26.4
-scipy==1.15.2
+matplotlib
+pytest
 jupyter

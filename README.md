@@ -1,235 +1,359 @@
 # MovieLens Recommender
 
-A production-ready, SVD-based collaborative filtering recommender system on MovieLens 100k with end-to-end training, inference, and ranking evaluation.
+A from-scratch SVD collaborative filtering recommender system on MovieLens 100k, built entirely in PyTorch. Includes training, evaluation with ranking metrics (NDCG, Precision, Recall, HitRate), top-N recommendation generation, and performance visualisation.
 
 ## Performance
 
-- **NDCG@10**: 0.25 (Normalized Discounted Cumulative Gain)
-- **Precision@10**: 0.30 (Top-10 recommendation precision)
-- **RMSE**: ~0.93 (rating prediction accuracy)
+| Metric | Value |
+|--------|-------|
+| **RMSE** | 1.08 |
+| **MAE** | 0.90 |
+| **NDCG@10** | 0.15 |
+| **Precision@10** | 0.12 |
+| **Recall@10** | 0.10 |
+| **HitRate@10** | 0.55 |
 
-These metrics align with published baselines for SVD on MovieLens 100k.
+Evaluated on a 80/20 random split of MovieLens 100k (943 users, 1,682 movies, 100k ratings). Relevance threshold: rating >= 4.
 
 ---
 
-## Getting Started
+## Quick Start
 
 ### Prerequisites
 
-- [Anaconda](https://www.anaconda.com/download) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html) installed
-- Git (to clone the repo)
+- Python 3.10+ (tested on 3.11)
+- pip
 
-### 1. Clone the Repository
+### 1. Clone and Install
 
 ```bash
 git clone https://github.com/<your-username>/movielens-recommender.git
 cd movielens-recommender
-```
-
-### 2. Create the Conda Environment
-
-```bash
-# Create a new environment with Python 3.10
-conda create -n movielens_env python=3.10 -y
-
-# Activate it
-conda activate movielens_env
-```
-
-### 3. Install Dependencies
-
-**Option A** — Install from `requirements.txt` (recommended):
-
-```bash
 pip install -r requirements.txt
 ```
 
-**Option B** — Install manually:
+The `requirements.txt` installs:
+- **PyTorch** — model implementation and training
+- **NumPy** — data processing and metrics
+- **Matplotlib** — plotting
+- **Pytest** — unit tests
+- **Jupyter** — notebook exploration
+
+### 2. Train the Model
 
 ```bash
-pip install scikit-surprise==1.1.4 pandas==2.3.3 numpy==1.26.4 scipy==1.15.2 jupyter
+python src/train.py
 ```
 
-> **Windows note:** If `scikit-surprise` fails to build from pip (requires C++ build tools), install it via conda-forge instead:
-> ```bash
-> conda install -c conda-forge scikit-surprise pandas numpy scipy jupyter -y
-> ```
+Trains the SVD model on MovieLens 100k and saves weights to `models/svd_rating_predictor.pt`. Takes ~5 seconds on CPU.
 
-### 4. Verify the Installation
+### 3. Run the Full Showcase
 
 ```bash
-python -c "from surprise import SVD, Dataset; print('OK')"
+python src/showcase.py --user 42
 ```
 
-You should see `OK` printed — you're all set.
+This produces a complete report: model summary, metrics, user profile, and top-10 recommendations with movie titles, plus a 4-panel figure saved to `results/showcase_report.png`.
 
 ---
-
-## Usage
-
-All scripts live in the `src/` directory. Run them from there so relative paths resolve correctly.
-
-```bash
-cd src
-```
-
-### Step 1: Train the Model
-
-```bash
-python train.py
-```
-
-This will:
-- Download MovieLens 100k automatically (first run only)
-- Train an SVD model with 20 latent factors (80/20 train-test split)
-- Print RMSE on the test set
-- Save the model and trainset to `models/`
-
-### Step 2: Generate Recommendations
-
-```bash
-python recommend.py
-```
-
-This will:
-- Load the saved model and trainset
-- Generate top-10 recommendations for a sample user
-- Print item IDs with predicted ratings
-
-To recommend for a different user, edit `user_id` in `recommend.py` or import the function:
-
-```python
-from recommend import load_model_and_trainset, get_top_n_recommendations
-
-model, trainset = load_model_and_trainset()
-recs = get_top_n_recommendations(model, trainset, user_id=5, n=10)
-for rank, (item, score) in enumerate(recs, 1):
-    print(f"{rank}. Item {item}: {score:.2f}")
-```
-
-### Step 3: Evaluate Ranking Metrics
-
-```bash
-python evaluate.py
-```
-
-This will:
-- Compute NDCG@10 and Precision@10 across all test users
-- Save results to `results/metrics.txt`
-
-### Explore the Data (Notebook)
-
-```bash
-cd ../notebooks
-jupyter notebook eda.ipynb
-```
-
----
-
-## Reproducing the Environment (Optional)
-
-Export the exact conda environment for full reproducibility:
-
-```bash
-conda env export > environment.yml
-```
-
-Anyone can then recreate it with:
-
-```bash
-conda env create -f environment.yml
-conda activate movielens_env
-```
 
 ## Project Structure
 
 ```
 movielens-recommender/
 ├── src/
-│   ├── train.py           # Train SVD model and save to disk
-│   ├── recommend.py       # Load model and generate top-N recommendations
-│   ├── evaluate.py        # Evaluate NDCG and Precision metrics
-│   └── utils.py          # Shared utility functions
-├── models/               # Saved trained model and trainset
-├── results/              # Evaluation metrics
-├── data/                 # MovieLens data (auto-downloaded)
-├── notebooks/            # EDA and analysis
-├── requirements.txt      # Python dependencies
-├── cheat-sheet.md       # Quick reference guide
-└── README.md            # This file
+│   ├── train.py           # Train the SVD model and save weights
+│   ├── evaluate.py        # Compute RMSE, MAE, and ranking metrics
+│   ├── recommend.py       # Generate top-N recommendations for a user
+│   ├── compute_ndcg.py    # NDCG, Precision, Recall, HitRate functions
+│   ├── plot.py            # Generate performance visualisation plots
+│   ├── showcase.py        # End-to-end demo tying everything together
+│   ├── test.py            # Unit tests (29 tests)
+│   └── utils.py           # Shared utility functions
+├── models/
+│   ├── svd_rating_predictor.py   # SVD model definition (nn.Module)
+│   └── svd_rating_predictor.pt   # Trained model weights
+├── results/               # Metrics + plots (generated by scripts)
+├── data/ml-100k/          # MovieLens 100k dataset
+├── notebooks/eda.ipynb    # Exploratory data analysis
+├── requirements.txt       # Python dependencies
+├── cheat-sheet.md         # Quick reference / interview notes
+└── README.md
 ```
-
-## How It Works
-
-### 1. Training (`train.py`)
-- Loads MovieLens 100k (943 users, 1,682 movies)
-- Trains an SVD model with 20 latent factors
-- 80/20 train-test split, random_state=42 for reproducibility
-- Saves model and trainset for inference
-
-### 2. Recommendation (`recommend.py`)
-- Loads the trained model and trainset
-- For a given user, predicts ratings for all unrated items
-- Returns top-N recommendations sorted by predicted rating
-- Filters out items the user has already rated
-
-### 3. Evaluation (`evaluate.py`)
-- Computes **NDCG@k**: Ranking quality with position-weighted relevance
-- Computes **Precision@k**: Fraction of top-k recommendations that are relevant
-- Relevant items = test set ratings ≥ 4.0
-- Reports average metrics across all test users
-
-## Key Design Decisions
-
-| Aspect | Choice | Why |
-|--------|--------|-----|
-| Algorithm | SVD (scikit-surprise) | Scalable, interpretable, strong baseline |
-| Factors | 20 | Classic choice; trade-off between expressiveness and overfitting |
-| Relevance threshold | Rating ≥ 4.0 | Industry standard for implicit positive feedback |
-| Evaluation | NDCG + Precision | Position-aware metrics for ranking quality |
-| Train/test split | 80/20 | Standard for evaluation |
-
-## Files Reference
-
-### `src/evaluate.py`
-- `ndcg_at_k(relevant_items, recommended_items, k)`: Computes NDCG@k
-- `precision_at_k(relevant_items, recommended_items, k)`: Computes Precision@k
-- `evaluate_ranking_metrics(model, trainset, testset, k=10)`: Full evaluation pipeline
-- `save_metrics(results, filepath, k=10)`: Persist metrics to disk
-
-### `src/recommend.py`
-- `load_model_and_trainset()`: Load saved model and trainset
-- `get_top_n_recommendations(model, trainset, user_id, n=10)`: Generate recommendations
-
-### `src/train.py`
-- `train_and_save()`: End-to-end training and model persistence
-
-### `src/utils.py`
-- Helper functions for data loading and model management
-
-## Reusable Components
-
-The NDCG and Precision functions are reusable across different recommendation systems:
-- Different algorithms (MF, neural CF, etc.)
-- Different datasets (Books, Music, etc.)
-- Different evaluation scenarios
-
-This demonstrates a modular approach to building ranking systems.
-
-## Future Improvements
-
-- Hyperparameter tuning (n_factors, learning rate)
-- Cross-validation for robust evaluation
-- Implicit feedback variant
-- Content-based features
-- Ensemble methods
-
-## References
-
-- MovieLens Dataset: https://grouplens.org/datasets/movielens/100k/
-- Scikit-Surprise: https://surpriselib.readthedocs.io/
-- Funk SVD: "Netflix Prize Postmortem" by Simon Funk
 
 ---
 
-**Interview Talking Point**: "I built an SVD recommender on MovieLens 100k as a standing, explicit ranking project. It achieves NDCG@10 of 0.25 and Precision@10 of 0.30, consistent with published baselines. The key wasn't state-of-the-art—it was demonstrating I can implement, evaluate, and document a ranking system end-to-end. I reused my NDCG function from the OXTR project, which shows I think in terms of reusable components."
+## Walkthrough: Every Script Explained
+
+### `models/svd_rating_predictor.py` — The Model
+
+The core model. Implements **Funk SVD** (the algorithm behind the Netflix Prize winner) from scratch in PyTorch.
+
+**Prediction formula:**
+
+```
+r̂(u, i) = μ + b_u + b_i + p_u · q_i
+```
+
+- `μ` — global mean rating (3.53 for MovieLens 100k)
+- `b_u` — per-user bias (does this user rate high/low?)
+- `b_i` — per-item bias (is this movie generally liked?)
+- `p_u · q_i` — dot product of learned latent factor vectors
+
+**Key classes:**
+- `SVDRatingPredictor(nn.Module)` — single model with `forward(user_ids, item_ids)` and `predict_all_items(user_id)` for ranking
+- `EnsembleSVDPredictor` — wraps N models, returns mean prediction + uncertainty
+
+**Parameters:** ~55k (20 latent factors × 943 users + 1,682 items, plus biases)
+
+```python
+from svd_rating_predictor import SVDRatingPredictor
+
+model = SVDRatingPredictor(num_users=943, num_items=1682, n_factors=20)
+```
+
+---
+
+### `src/train.py` — Training
+
+Trains the SVD model on MovieLens 100k ratings.
+
+```bash
+python src/train.py
+```
+
+**What it does:**
+1. Loads ratings from `data/ml-100k/ml-100k/u.data` (tab-separated, 100k lines)
+2. Converts to 0-indexed `(user, item, rating)` triples
+3. Splits 80/20 with `seed=42` for reproducibility
+4. Trains the `SVDRatingPredictor` with Adam optimiser (lr=0.005, L2 reg=0.02)
+5. Mini-batch SGD, 50 epochs, batch size 1024
+6. Prints train loss + test RMSE every 10 epochs
+7. Saves trained weights to `models/svd_rating_predictor.pt`
+
+**Key functions:**
+- `load_ratings(path)` — parse `u.data`, returns `(triples, num_users, num_items)`
+- `train_test_split_ratings(ratings, test_ratio, seed)` — deterministic split
+- `train_svd_predictor(train, test, ...)` — full training loop, returns `(model, rmse)`
+
+**Example output:**
+```
+TRAINING SVD RATING PREDICTOR (from scratch)
+Global mean: 3.5319
+Train ratings: 80,000  |  Test ratings: 20,000
+Model params:  55,125
+Epoch  10/50  |  Train Loss: 1.3044  |  Test RMSE: 1.1098
+Epoch  50/50  |  Train Loss: 0.9271  |  Test RMSE: 1.0791
+Final Test RMSE: 1.0791
+```
+
+---
+
+### `src/evaluate.py` — Evaluation
+
+Computes both rating-prediction and ranking metrics on the test set.
+
+```bash
+python src/evaluate.py
+```
+
+**What it does:**
+1. Loads the trained model from `models/svd_rating_predictor.pt`
+2. Computes **RMSE** and **MAE** on 20k test ratings
+3. For each test user, generates a top-10 ranked list from unrated items
+4. Computes **NDCG@10**, **Precision@10**, **Recall@10**, **HitRate@10**
+5. Saves all metrics to `results/metrics.txt`
+
+**Key functions:**
+- `compute_rmse(model, test_triples)` — rating prediction error
+- `compute_mae(model, test_triples)` — absolute error
+- `save_metrics(results, filepath, k)` — persist to file
+- Uses ranking functions from `compute_ndcg.py`
+
+---
+
+### `src/recommend.py` — Recommendations
+
+Generates personalised movie recommendations with titles and genres.
+
+```bash
+python src/recommend.py --user 42 --n 10
+```
+
+**What it does:**
+1. Loads trained model + MovieLens item metadata (`u.item`, `u.user`)
+2. Shows the user's profile: age, gender, occupation, top-rated movies
+3. Predicts ratings for all unrated items, returns top-N
+4. Prints recommendations with movie titles and genres
+
+**Key functions:**
+- `load_item_metadata()` — movie titles + genres from `u.item`
+- `load_user_info()` — demographics from `u.user`
+- `get_top_n_recommendations(model, user_id, rated_items, num_items, n)` — ranked list
+- `get_user_history(user_id, ratings)` — what the user rated
+
+**Example output:**
+```
+  User 42  |  Age: 30  |  Gender: M  |  Occupation: administrator
+  Rated 183 movies  |  Avg rating: 3.73
+
+  Top-5 Recommendations:
+  Rank  Pred   Title                                      Genres
+  1     3.86   Star Wars (1977)                           Action, Adventure
+  2     3.76   Fargo (1996)                               Crime, Drama, Thriller
+  3     3.75   Shawshank Redemption, The (1994)           Drama
+```
+
+---
+
+### `src/compute_ndcg.py` — Ranking Metrics
+
+Core implementation of all ranking evaluation metrics.
+
+```bash
+python src/compute_ndcg.py
+```
+
+**What it does (standalone):**
+1. Loads trained model + data
+2. Evaluates NDCG, Precision, Recall, HitRate at k = 1, 3, 5, 10, 20, 50
+3. Prints a comparison table and saves to `results/metrics.txt`
+
+**Key functions (also imported by other scripts):**
+- `ndcg_at_k(relevant_items, recommended_items, k)` — Normalized DCG (binary relevance)
+- `precision_at_k(relevant_items, recommended_items, k)` — fraction of top-k that are relevant
+- `recall_at_k(relevant_items, recommended_items, k)` — fraction of relevant items found
+- `hit_rate_at_k(relevant_items, recommended_items, k)` — at least one hit in top-k?
+- `evaluate_all_users(model, train, test, num_items, k)` — aggregate metrics across users
+
+**Metric definitions:**
+
+| Metric | Formula | Intuition |
+|--------|---------|-----------|
+| NDCG@k | DCG / IDCG | Rewards relevant items ranked higher (log discount) |
+| Precision@k | hits / k | What fraction of recs are good? |
+| Recall@k | hits / total relevant | What fraction of good items did we find? |
+| HitRate@k | 1 if any hit else 0 | Did we get at least one right? |
+
+---
+
+### `src/plot.py` — Visualisations
+
+Generates 6 performance plots and saves them to `results/`.
+
+```bash
+python src/plot.py
+```
+
+**Plots generated:**
+
+| File | Description |
+|------|-------------|
+| `training_curve.png` | Train vs test RMSE over 50 epochs |
+| `predicted_vs_actual.png` | Scatter plot of predictions vs ground truth |
+| `rating_distributions.png` | Actual vs predicted rating histograms |
+| `metrics_at_k.png` | NDCG@k and Precision@k for varying k |
+| `per_user_error.png` | Distribution of per-user MAE |
+| `top10_recommendations.png` | Bar chart of top-10 recs for a sample user |
+
+---
+
+### `src/showcase.py` — Full Demo
+
+The main showcase script. Ties together train, evaluate, recommend, and plot into one polished output.
+
+```bash
+python src/showcase.py --user 1          # default
+python src/showcase.py --user 42 --n 5   # user 42, top 5
+```
+
+**What it produces:**
+- **Console:** model summary, RMSE/MAE, ranking metrics table at k=1/5/10/20, user profile with favourite movies, top-N recommendations with titles and genres
+- **`results/showcase_report.png`** — 4-panel figure (predicted vs actual, metrics@k, top-N bar chart, rating distributions)
+- **`results/metrics.txt`** — all numeric metrics
+
+---
+
+### `src/test.py` — Unit Tests
+
+29 tests covering data loading, model architecture, metrics, training, and end-to-end ranking.
+
+```bash
+python -m pytest src/test.py -v
+```
+
+**Test classes:**
+
+| Class | Tests | What it covers |
+|-------|-------|----------------|
+| `TestDataLoading` | 8 | Rating count (100k), dimensions (943×1682), 0-indexing, valid ranges, split sizes, determinism |
+| `TestSVDModel` | 7 | Output shape, clamping [1,5], `predict_all_items`, param count, global mean buffer, gradient flow, save/load |
+| `TestEnsembleModel` | 3 | Model count, output shapes, non-negative uncertainty |
+| `TestMetrics` | 8 | NDCG perfect/worst/empty/partial/bounded, Precision perfect/none/partial |
+| `TestTraining` | 2 | RMSE < 3 on synthetic data, RMSE < 2 on real MovieLens (5 epochs) |
+| `TestEndToEndRanking` | 1 | Full pipeline: load model → predict all items → verify top-10 sorted |
+
+---
+
+### `src/utils.py` — Utilities
+
+Shared helper functions used by other scripts.
+
+- `load_saved_model(path)` — load trained SVD model from `.pt` file
+- `get_user_rating_history(user_id)` — all ratings for a user
+- `get_model_info(model)` — parameter count, factor count, global mean
+
+---
+
+## How the Algorithm Works
+
+**Funk SVD** decomposes the user-item rating matrix into low-rank factors:
+
+```
+R ≈ μ + B_users + B_items + P × Q^T
+```
+
+Each user `u` is represented by a bias `b_u` and a latent vector `p_u ∈ ℝ^20`.
+Each item `i` is represented by a bias `b_i` and a latent vector `q_i ∈ ℝ^20`.
+
+The predicted rating is:
+
+```
+r̂(u, i) = μ + b_u + b_i + p_u · q_i
+```
+
+Training minimises MSE with L2 regularisation using Adam. The model is trained on 80k ratings and evaluated on 20k held-out ratings.
+
+**For ranking**, we compute `r̂(u, i)` for all unrated items and sort descending. The top-N items become the recommendation list, evaluated with NDCG@k and Precision@k.
+
+---
+
+## Key Design Decisions
+
+| Aspect | Choice | Rationale |
+|--------|--------|-----------|
+| Algorithm | Funk SVD (from scratch) | Strong baseline, interpretable, fast on CPU |
+| Framework | PyTorch | Full control over training loop, GPU-ready |
+| Latent factors | 20 | Balanced expressiveness vs overfitting for 100k ratings |
+| Optimiser | Adam (lr=0.005, L2=0.02) | Fast convergence, built-in weight decay |
+| Relevance threshold | Rating ≥ 4.0 | Standard for converting explicit ratings to binary relevance |
+| Train/test split | 80/20, seed=42 | Reproducible evaluation |
+| Predictions | Clamped to [1, 5] | Keeps outputs on the valid MovieLens rating scale |
+
+---
+
+## Data
+
+**MovieLens 100k** (GroupLens Research):
+- 943 users, 1,682 movies, 100,000 ratings (1–5 scale)
+- Located at `data/ml-100k/ml-100k/u.data`
+- Tab-separated: `user_id  item_id  rating  timestamp`
+- User demographics in `u.user`, movie metadata in `u.item`
+
+---
+
+## References
+
+- [MovieLens 100k Dataset](https://grouplens.org/datasets/movielens/100k/) — GroupLens Research
+- [Funk SVD](https://sifter.org/~simon/journal/20061211.html) — Simon Funk's Netflix Prize blog post
+- [PyTorch](https://pytorch.org/) — model framework

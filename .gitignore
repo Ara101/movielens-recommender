@@ -208,3 +208,7 @@ __marimo__/
 
 # ignore data files
 data/
+
+# ignore any file that ends with model files .pkl or pt
+*.pkl
+*.pt

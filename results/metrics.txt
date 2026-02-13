@@ -1,1 +1,9 @@
-# RMSE, NDCG@10, Precision@10
+Evaluation Metrics (k=10)
+=============================================
+RMSE                   1.0793
+MAE                    0.9006
+NDCG@10                0.1490
+Precision@10           0.1203
+Recall@10              0.0974
+HitRate@10             0.5498
+users_evaluated        924
