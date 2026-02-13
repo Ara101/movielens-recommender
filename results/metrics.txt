@@ -1,0 +1,3 @@
+# This file will contain the evaluation metrics
+# Run src/train.py to generate RMSE
+# Run src/evaluate.py to generate NDCG@10 and Precision@10
