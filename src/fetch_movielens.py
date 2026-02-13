@@ -1,60 +1,71 @@
 """
 fetch_movielens.py - Download and extract MovieLens 100k dataset.
-Saves the main rating file (u.data) to the data/ directory.
+Saves all data files (u.data, u.item, u.user, u.genre, etc.) to data/ml-100k/.
+
+Run from anywhere:
+    python src/fetch_movielens.py
 """
 
 import urllib.request
 import zipfile
 import os
-from pathlib import Path
 
-# Constants
-DATA_DIR = Path("data")
-ZIP_PATH = DATA_DIR / "ml-100k.zip"
-EXTRACT_DIR = DATA_DIR / "ml-100k"
-RATINGS_FILE = "u.data"  # main file we need
-TARGET_FILE = DATA_DIR / "ratings.csv"  # optional: save as CSV for easier use
+# Resolve paths relative to the repo root (works regardless of cwd)
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+_ROOT_DIR = os.path.join(_SCRIPT_DIR, "..")
+
+DATA_DIR = os.path.join(_ROOT_DIR, "data")
+ZIP_PATH = os.path.join(DATA_DIR, "ml-100k.zip")
+# The zip contains a top-level ml-100k/ folder, and we extract into data/ml-100k/,
+# so files end up at data/ml-100k/ml-100k/u.data — matching train.py's DATA_PATH.
+EXTRACT_DIR = os.path.join(DATA_DIR, "ml-100k")
+RATINGS_FILE = os.path.join(EXTRACT_DIR, "ml-100k", "u.data")
+
 
 def download_movielens():
     """Download the MovieLens 100k dataset if not already present."""
     url = "https://files.grouplens.org/datasets/movielens/ml-100k.zip"
-    
-    # Create data directory if it doesn't exist
-    DATA_DIR.mkdir(exist_ok=True)
-    
-    # Download only if not already downloaded
-    if not ZIP_PATH.exists():
-        print(f"Downloading {url}...")
-        urllib.request.urlretrieve(url, ZIP_PATH)
-        print("Download complete.")
-    else:
-        print("Zip file already exists, skipping download.")
 
-def extract_ratings():
-    """Extract u.data from the zip and save it as CSV in the data folder."""
-    if not ZIP_PATH.exists():
-        raise FileNotFoundError("Zip file not found. Run download first.")
-    
-    # Extract only u.data if not already extracted
-    ratings_extracted = EXTRACT_DIR / RATINGS_FILE
-    if not ratings_extracts.exists():
-        print("Extracting u.data...")
-        with zipfile.ZipFile(ZIP_PATH, 'r') as z:
-            z.extract(f"ml-100k/{RATINGS_FILE}", DATA_DIR)
-        print("Extraction complete.")
+    os.makedirs(DATA_DIR, exist_ok=True)
+
+    if not os.path.exists(ZIP_PATH):
+        print(f"Downloading {url} ...")
+        urllib.request.urlretrieve(url, ZIP_PATH)
+        print(f"Download complete → {ZIP_PATH}")
     else:
-        print("u.data already extracted.")
-    
-    # Optional: Convert to CSV for easier use with pandas
-    import csv
-    with open(ratings_extracted, 'r') as infile, open(TARGET_FILE, 'w', newline='') as outfile:
-        reader = csv.reader(infile, delimiter='\t')
-        writer = csv.writer(outfile)
-        writer.writerow(['user_id', 'item_id', 'rating', 'timestamp'])
-        writer.writerows(reader)
-    print(f"Saved ratings as CSV: {TARGET_FILE}")
+        print(f"Zip already exists at {ZIP_PATH}, skipping download.")
+
+
+def extract_data():
+    """Extract all MovieLens files from the zip into data/ml-100k/."""
+    if not os.path.exists(ZIP_PATH):
+        raise FileNotFoundError(
+            f"Zip file not found at {ZIP_PATH}. Run download_movielens() first."
+        )
+
+    if os.path.exists(RATINGS_FILE):
+        print(f"Data already extracted at {EXTRACT_DIR}")
+        return
+
+    print("Extracting dataset ...")
+    os.makedirs(EXTRACT_DIR, exist_ok=True)
+    with zipfile.ZipFile(ZIP_PATH, "r") as z:
+        z.extractall(EXTRACT_DIR)
+    print(f"Extraction complete → {EXTRACT_DIR}")
+
+
+def verify():
+    """Check that the key data files exist."""
+    required = ["u.data", "u.item", "u.user", "u.genre"]
+    data_subdir = os.path.join(EXTRACT_DIR, "ml-100k")
+    missing = [f for f in required if not os.path.exists(os.path.join(data_subdir, f))]
+    if missing:
+        raise FileNotFoundError(f"Missing files in {data_subdir}: {missing}")
+    print(f"Verified: all required files present in {data_subdir}")
+
 
 if __name__ == "__main__":
     download_movielens()
-    extract_ratings()
-    print("✅ Data ready! File saved to:", TARGET_FILE)
+    extract_data()
+    verify()
+    print(f"\nData ready at: {os.path.abspath(EXTRACT_DIR)}")
